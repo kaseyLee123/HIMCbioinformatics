@@ -1,12 +1,13 @@
 library(tidyverse)
 library(dplyr)
-library(DESeq2)
 library(pheatmap)
 if (!require("BiocManager", quietly = TRUE))
   install.packages("BiocManager")
 
 BiocManager::install(c("limma","edgeR","ggrepel"))
 library(edgeR)
+install.packages("ggcorrplot")
+library(ggcorrplot)
 
 my_data <- read.csv("/Users/kasey/Desktop/HIMC/GSE243919_FFPE_samples_raw_read_counts.csv")
 #change NA values to 0 to avoid future conflicts
@@ -64,13 +65,53 @@ top_cpm_combined_expressed <- cpm_output$top_combined_expressed
 
 
 
-#create PCA chart 
-#samples that cluster together should have very similar gene expression  
-#while those that are far are biologically very different
+#PCA CHART---------------------------------------
+
+#PCA works better when data follows a normal distribution --> taking log 2 normalizes the raw CPM distribution
+log_cpm_matrix <- log2(cpm_matrix + 1)
+
+#run PCA-------------
+#t() transposes it so its each row is one sample rather than the gene
+#center subtracts mean of each gene across samples to remove the "baseline" so easier to find actual variance
+#scale true when using raw cpm but we already scaled using log
+pca <- prcomp(t(log_cpm_matrix), center = TRUE, scale. = FALSE)
+
+#calculate variance of each PC---------
+#PCA produces as much PCs as Samples but we can only plot 2 at a time, 
+#so knowing the variance is important for knowing how much of the full picture the axes are showing
+var_pct <- round(100 * pca$sdev^2 / sum(pca$sdev^2), 1)
+
+#build data frame for plotting--------
+pca_df <- data.frame(
+  PC1       = pca$x[, 1],
+  PC2       = pca$x[, 2],
+  patient   = c("P29", "P29", "P73", "P73", "P100", "P100", "P195", "P195"),
+  timepoint = c("Pre", "Post", "Pre", "Post", "Pre", "Post", "Pre", "Post")
+)
 
 
+#plot--------
+pca_plot <- ggplot(pca_df, aes(x = PC1, y = PC2, color = patient, shape = timepoint)) +
+  geom_line(aes(group = patient), color = "grey70") +
+  geom_point(size = 4) +
+  labs(
+    x     = paste0("PC1 (", var_pct[1], "% variance)"),
+    y     = paste0("PC2 (", var_pct[2], "% variance)"),
+    title = "PCA of FL samples (pre vs post mosunetuzumab)"
+  ) +
+  theme_minimal()
 
+print(pca_plot)
 
+#SAMPLE CORRELATION HEATMAP---------------------------------------
 
+cor_matrix <- cor(log_cpm_matrix, method = "spearman")
+
+heatmap <- pheatmap(cor_matrix,
+         display_numbers = TRUE,
+         number_format = "%.2f",
+         main = "Sample-to-sample correlation (Spearman)")
+
+print(heatmap)
 
 
