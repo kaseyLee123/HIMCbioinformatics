@@ -119,6 +119,3 @@ sig_down <- all_genes[all_genes$adj.P.Val < 0.2 & all_genes$logFC < -0.5, ]
 sig_down <- sig_down[order(sig_down$logFC), ]
 print(paste("Number of downregulated genes:", nrow(sig_down)))
 print(sig_down)
-
-# check the isolated gene that dropped dramatically at relapse
-print(all_genes[all_genes$logFC < -5, ])
