@@ -46,9 +46,12 @@ vwts <- voomWithQualityWeights(DGE, design = design, normalize.method = "none", 
 fit <- lmFit(vwts, design)
 fit <- eBayes(fit, robust = TRUE)
 
-#prints out a a
+#prints out summary of significant genes
 print(summary(decideTests(fit, adjust.method = "fdr", p.value = 0.05)))
-volcanoplot(fit, coef = "timepointPost", highlight = 10)
+
+#built in volcano plot with gene names
+volcanoplot(fit, coef = "timepointPost", highlight = 10,
+            names = my_data$gene_name[match(rownames(fit$coefficients), my_data$Gene_Id)])
 
 #gets 10 most significant DE genes sorted by p-values  
 top10 <- topTable(fit, adjust = "BH", coef = "timepointPost", resort.by = "P")
@@ -58,13 +61,17 @@ print(top10)
 all_genes <- topTable(fit, adjust = "BH", coef = "timepointPost",
                       p.value = 1, number = Inf, resort.by = "P")
 
+# add gene symbols to all_genes table
+gene_symbols <- my_data[, c("Gene_Id", "gene_name")]
+all_genes$gene_id <- rownames(all_genes)
+all_genes <- merge(all_genes, gene_symbols, by.x = "gene_id", by.y = "Gene_Id", all.x = TRUE)
+
 #shows distribution of p-values 
 print(summary(all_genes$adj.P.Val))
 #how big expression differences are from pre and post
 print(summary(all_genes$logFC))
 
 #VOLCANO PLOT--------------------------------------------
-all_genes$gene_id <- rownames(all_genes)
 all_genes$sig <- ifelse(all_genes$adj.P.Val < 0.2 & all_genes$logFC > 0.5,  "Up",
                         ifelse(all_genes$adj.P.Val < 0.2 & all_genes$logFC < -0.5, "Down", "NS"))
 
@@ -72,7 +79,7 @@ ggplot(all_genes, aes(x = logFC, y = -log10(P.Value), color = sig)) +
   geom_point(size = 1, alpha = 0.6) +
   scale_color_manual(values = c("Up" = "red", "Down" = "blue", "NS" = "grey")) +
   geom_text_repel(data = subset(all_genes, adj.P.Val < 0.2 & abs(logFC) > 1),
-                  aes(label = gene_id), size = 2.5, max.overlaps = 20) +
+                  aes(label = gene_name), size = 2.5, max.overlaps = 20) +
   geom_vline(xintercept = c(-0.5, 0.5), linetype = "dashed", color = "black") +
   geom_hline(yintercept = -log10(0.05), linetype = "dashed", color = "black") +
   labs(title = "Volcano plot: post vs pre mosunetuzumab",
@@ -80,6 +87,20 @@ ggplot(all_genes, aes(x = logFC, y = -log10(P.Value), color = sig)) +
        y = "-log10(p-value)",
        color = "Expression") +
   theme_minimal()
+
+#top 10 highlighted genes from the built-in volcano plot
+volcano_highlights <- topTable(fit, adjust = "BH", coef = "timepointPost", 
+                               number = 10, resort.by = "P")
+volcano_highlights$gene_id <- rownames(volcano_highlights)
+volcano_highlights <- merge(volcano_highlights, gene_symbols, 
+                            by.x = "gene_id", by.y = "Gene_Id", all.x = TRUE)
+
+print(volcano_highlights[, c("gene_name", "logFC", "P.Value", "adj.P.Val")])
+
+dropped_expression_gene <- all_genes[all_genes$logFC < -5, c("gene_name", "logFC", "P.Value", "adj.P.Val")]
+print(dropped_expression_gene)
+increased_expression_gene <- all_genes[all_genes$logFC > 5, c("gene_name", "logFC", "P.Value", "adj.P.Val")]
+print(increased_expression_gene)
 
 #ranked gene list for most upregulated to most downregulated by fold change
 ranked_genes <- all_genes[order(all_genes$logFC, decreasing = TRUE), ]
@@ -98,3 +119,6 @@ sig_down <- all_genes[all_genes$adj.P.Val < 0.2 & all_genes$logFC < -0.5, ]
 sig_down <- sig_down[order(sig_down$logFC), ]
 print(paste("Number of downregulated genes:", nrow(sig_down)))
 print(sig_down)
+
+# check the isolated gene that dropped dramatically at relapse
+print(all_genes[all_genes$logFC < -5, ])
