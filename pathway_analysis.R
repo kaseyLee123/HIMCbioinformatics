@@ -78,6 +78,7 @@ print(dotplot(gsea_go, showCategory = 20, split = ".sign",
               title = "GSEA GO Biological Process") +
         facet_grid(. ~ .sign))
 
+#prints plot of most significant go pathway according to default (p-value)
 if (nrow(as.data.frame(gsea_go)) > 0) {
   print(gseaplot2(gsea_go, geneSetID = 1, title = gsea_go$Description[1]))
 }
