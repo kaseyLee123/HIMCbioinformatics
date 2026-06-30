@@ -11,6 +11,10 @@ library(org.Hs.eg.db)
 library(enrichplot)
 library(gprofiler2)
 
+if (!require("ReactomePA", quietly = TRUE))
+  BiocManager::install("ReactomePA")
+library(ReactomePA)
+
 source('data_analysis.R')
 source('differential_expression_analysis.R')
 
@@ -24,6 +28,11 @@ all_genes_entrez <- merge(all_genes, gene_list,
                           by.x = "gene_name", by.y = "SYMBOL",
                           all.x = FALSE)
 
+#GO vs KEGG vs REACTOME
+#GO:good for initial overview, classifies genes by role, location, process
+#KEGG: highlights signaling cascades and metabolic routes
+#REACTOME: very human-centric, good for detailing molecular reactions
+
 #OVER REPRESENTATION ANAYLYSIS--------------------------------------
 #sees if any of the genes are in a specific pathway more than you would expect/more than chance
 
@@ -32,7 +41,7 @@ sig_genes <- all_genes_entrez$ENTREZID[all_genes_entrez$adj.P.Val < 0.2 &
                                          abs(all_genes_entrez$logFC) > 0.5]
 background_genes <- all_genes_entrez$ENTREZID
 
-
+#go
 go_ora <- enrichGO(gene          = sig_genes, 
                    universe      = background_genes,
                    OrgDb         = org.Hs.eg.db, #human gene database
@@ -45,7 +54,7 @@ go_ora <- enrichGO(gene          = sig_genes,
 print(summary(go_ora))
 print(dotplot(go_ora, showCategory = 20, title = "GO Biological Process enrichment"))
 
-#tests kegg pathways specifically which focuses on more specific metabolic and signaling pathways
+#kegg
 kegg_ora <- enrichKEGG(gene          = sig_genes,
                        universe      = background_genes,
                        organism      = "hsa", #human
@@ -54,6 +63,16 @@ kegg_ora <- enrichKEGG(gene          = sig_genes,
 
 print(summary(kegg_ora))
 print(dotplot(kegg_ora, showCategory = 20, title = "KEGG pathway enrichment"))
+
+#tests reactome pathways
+reactome_ora <- enrichPathway(gene          = sig_genes,
+                              universe      = background_genes,
+                              organism      = "human",
+                              pAdjustMethod = "BH",
+                              pvalueCutoff  = 0.05,
+                              readable      = TRUE)
+print(summary(reactome_ora))
+print(dotplot(reactome_ora, showCategory = 20, title = "Reactome pathway enrichment"))
 
 #GENE SET ENRICHMENT ANALYSIS----------------------------------------------------
 #shows whether genes in a specific pathway tend to cluster at the top or bottom together or are randomly dispersed
@@ -65,6 +84,7 @@ ranked_list <- sort(ranked_list, decreasing = TRUE)
 #removes duplicates just in case
 ranked_list <- ranked_list[!duplicated(names(ranked_list))]
 
+#go
 gsea_go <- gseGO(geneList     = ranked_list,
                  OrgDb        = org.Hs.eg.db,
                  ont          = "BP", #biological process
@@ -83,7 +103,7 @@ if (nrow(as.data.frame(gsea_go)) > 0) {
   print(gseaplot2(gsea_go, geneSetID = 1, title = gsea_go$Description[1]))
 }
 
-
+#kegg
 gsea_kegg <- gseKEGG(geneList     = ranked_list,
                      organism     = "hsa",
                      minGSSize    = 10,
@@ -94,6 +114,17 @@ gsea_kegg <- gseKEGG(geneList     = ranked_list,
 print(summary(gsea_kegg))
 print(dotplot(gsea_kegg, showCategory = 20, split = ".sign",
               title = "GSEA KEGG pathways") +
+        facet_grid(. ~ .sign))
+
+#reactome
+gsea_reactome <- gsePathway(geneList     = ranked_list,
+                            organism     = "human",
+                            minGSSize    = 10,
+                            maxGSSize    = 500,
+                            pvalueCutoff = 0.05,
+                            verbose      = FALSE)
+print(summary(gsea_reactome))
+print(dotplot(gsea_reactome, showCategory = 20, split = ".sign", title = "GSEA Reactome pathways") +
         facet_grid(. ~ .sign))
 
 #gprofiler 2 automatically tests against GO KEGG and Reactome databases all at once
